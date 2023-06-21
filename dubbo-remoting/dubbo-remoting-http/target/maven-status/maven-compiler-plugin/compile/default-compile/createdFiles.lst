@@ -1,0 +1,13 @@
+org/apache/dubbo/remoting/http/jetty/JettyHttpBinder.class
+org/apache/dubbo/remoting/http/support/AbstractHttpServer.class
+org/apache/dubbo/remoting/http/servlet/ServletHttpServer.class
+org/apache/dubbo/remoting/http/tomcat/TomcatHttpBinder.class
+org/apache/dubbo/remoting/http/HttpBinder.class
+org/apache/dubbo/remoting/http/servlet/ServletHttpBinder.class
+org/apache/dubbo/remoting/http/HttpServer.class
+org/apache/dubbo/remoting/http/jetty/JettyHttpServer.class
+org/apache/dubbo/remoting/http/servlet/DispatcherServlet.class
+org/apache/dubbo/remoting/http/servlet/ServletManager.class
+org/apache/dubbo/remoting/http/servlet/BootstrapListener.class
+org/apache/dubbo/remoting/http/tomcat/TomcatHttpServer.class
+org/apache/dubbo/remoting/http/HttpHandler.class

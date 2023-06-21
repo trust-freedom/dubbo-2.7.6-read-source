@@ -1,0 +1,6 @@
+org/apache/dubbo/remoting/transport/grizzly/GrizzlyChannel.class
+org/apache/dubbo/remoting/transport/grizzly/GrizzlyTransporter.class
+org/apache/dubbo/remoting/transport/grizzly/GrizzlyServer.class
+org/apache/dubbo/remoting/transport/grizzly/GrizzlyHandler.class
+org/apache/dubbo/remoting/transport/grizzly/GrizzlyClient.class
+org/apache/dubbo/remoting/transport/grizzly/GrizzlyCodecAdapter.class

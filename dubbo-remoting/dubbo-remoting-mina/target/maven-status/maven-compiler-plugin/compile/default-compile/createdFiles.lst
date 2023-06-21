@@ -1,0 +1,10 @@
+org/apache/dubbo/remoting/transport/mina/MinaTransporter.class
+org/apache/dubbo/remoting/transport/mina/MinaCodecAdapter$1.class
+org/apache/dubbo/remoting/transport/mina/MinaCodecAdapter.class
+org/apache/dubbo/remoting/transport/mina/MinaHandler.class
+org/apache/dubbo/remoting/transport/mina/MinaCodecAdapter$InternalEncoder.class
+org/apache/dubbo/remoting/transport/mina/MinaClient$1.class
+org/apache/dubbo/remoting/transport/mina/MinaServer.class
+org/apache/dubbo/remoting/transport/mina/MinaClient.class
+org/apache/dubbo/remoting/transport/mina/MinaChannel.class
+org/apache/dubbo/remoting/transport/mina/MinaCodecAdapter$InternalDecoder.class

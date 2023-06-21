@@ -1,0 +1,4 @@
+org/apache/dubbo/common/serialize/hessian2/Hessian2ObjectOutput.class
+org/apache/dubbo/common/serialize/hessian2/Hessian2ObjectInput.class
+org/apache/dubbo/common/serialize/hessian2/Hessian2Serialization.class
+org/apache/dubbo/common/serialize/hessian2/Hessian2SerializerFactory.class
