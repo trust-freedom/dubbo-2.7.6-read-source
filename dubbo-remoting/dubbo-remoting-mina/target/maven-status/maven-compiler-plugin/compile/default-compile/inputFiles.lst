@@ -1,6 +1,0 @@
-/Users/sunli/code/java/dubbo-2.7.6-read-source/dubbo-remoting/dubbo-remoting-mina/src/main/java/org/apache/dubbo/remoting/transport/mina/MinaServer.java
-/Users/sunli/code/java/dubbo-2.7.6-read-source/dubbo-remoting/dubbo-remoting-mina/src/main/java/org/apache/dubbo/remoting/transport/mina/MinaHandler.java
-/Users/sunli/code/java/dubbo-2.7.6-read-source/dubbo-remoting/dubbo-remoting-mina/src/main/java/org/apache/dubbo/remoting/transport/mina/MinaTransporter.java
-/Users/sunli/code/java/dubbo-2.7.6-read-source/dubbo-remoting/dubbo-remoting-mina/src/main/java/org/apache/dubbo/remoting/transport/mina/MinaChannel.java
-/Users/sunli/code/java/dubbo-2.7.6-read-source/dubbo-remoting/dubbo-remoting-mina/src/main/java/org/apache/dubbo/remoting/transport/mina/MinaClient.java
-/Users/sunli/code/java/dubbo-2.7.6-read-source/dubbo-remoting/dubbo-remoting-mina/src/main/java/org/apache/dubbo/remoting/transport/mina/MinaCodecAdapter.java

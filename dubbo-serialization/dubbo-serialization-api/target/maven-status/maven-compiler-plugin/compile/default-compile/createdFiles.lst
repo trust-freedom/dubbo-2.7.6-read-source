@@ -1,9 +1,0 @@
-org/apache/dubbo/common/serialize/ObjectInput.class
-org/apache/dubbo/common/serialize/Serialization.class
-org/apache/dubbo/common/serialize/DataOutput.class
-org/apache/dubbo/common/serialize/ObjectOutput.class
-org/apache/dubbo/common/serialize/support/SerializationOptimizer.class
-org/apache/dubbo/common/serialize/Cleanable.class
-org/apache/dubbo/common/serialize/Constants.class
-org/apache/dubbo/common/serialize/support/SerializableClassRegistry.class
-org/apache/dubbo/common/serialize/DataInput.class
