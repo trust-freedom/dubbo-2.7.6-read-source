@@ -385,6 +385,7 @@ public class ReferenceConfig<T> extends ReferenceConfigBase<T> {
         if (getGeneric() == null && getConsumer() != null) {
             setGeneric(getConsumer().getGeneric());
         }
+        // 泛化调用的情况，接口类型为GenericService，这样在进行泛化调用时，能够转换为GenericService，并调用genericService.$invoke()
         if (ProtocolUtils.isGeneric(generic)) {
             interfaceClass = GenericService.class;
         } else {

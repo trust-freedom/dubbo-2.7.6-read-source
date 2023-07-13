@@ -1182,20 +1182,39 @@ public final class ReflectUtils {
         return properties;
     }
 
+    /**
+     * 获取返回值类型
+     * 会根据返回类型是否为Future或其子类，获取真实的返回类型
+     * @param method
+     * @return  返回为Type[]，
+     *          第一个返回值returnType是去掉Future后的原始类型，不带<XXX>的参数类型，如 java.util.List
+     *          第二个返回值genericReturnType是去掉Future后的带XXX>的参数类型，如 java.util.List<java.lang.String>
+     *          具体可见 {@link org.apache.dubbo.common.utils.ReflectUtilsTest#testGetReturnTypes()}
+     */
     public static Type[] getReturnTypes(Method method) {
         Class<?> returnType = method.getReturnType();
         Type genericReturnType = method.getGenericReturnType();
+        /**
+         * 如果returnType是Future或者其子类
+         * 下面的逻辑是想获取Future<XXX>中的XXX类型
+         */
         if (Future.class.isAssignableFrom(returnType)) {
+            // 如果genericReturnType是参数类型
             if (genericReturnType instanceof ParameterizedType) {
+                // 获取真实的参数类型，如 CompletableFuture<List<String>> 获取到的是 List<String>
                 Type actualArgType = ((ParameterizedType) genericReturnType).getActualTypeArguments()[0];
+                // 如果 actualArgType 还是参数类型
                 if (actualArgType instanceof ParameterizedType) {
+                    // returnType 赋值为 真实类型，如 List<String> 的真实类型为 List
                     returnType = (Class<?>) ((ParameterizedType) actualArgType).getRawType();
+                    // genericReturnType 赋值为 actualArgType，如 List<String>
                     genericReturnType = actualArgType;
-                } else {
+                } else { // actualArgType 不是参数类型，如 CompletableFuture<String>，actualArgType 为 String
+                         // returnType 和 genericReturnType 都是actualArgType，即 String
                     returnType = (Class<?>) actualArgType;
                     genericReturnType = returnType;
                 }
-            } else {
+            } else { // returnType是Future或其子类，但没有<XXX>参数类型，返回的两个类型都为null
                 returnType = null;
                 genericReturnType = null;
             }

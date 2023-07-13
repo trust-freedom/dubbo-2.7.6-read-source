@@ -64,15 +64,29 @@ public class RpcUtils {
         return null;
     }
 
+    /**
+     * 通过Invocation调用信息，获取dubbo service方法的返回值类型
+     * 具体案例见 {@link org.apache.dubbo.rpc.support.RpcUtilsTest#testGetReturnTypes()}
+     * @param invocation  invocation中有调用interface、methodName、参数
+     * @return 返回Type[]
+     *         第一个返回值returnType是去掉Future后的原始类型，不带<XXX>的参数类型，如 java.util.List
+     *         第二个返回值genericReturnType是去掉Future后的带XXX>的参数类型，如 java.util.List<java.lang.String>
+     */
     public static Type[] getReturnTypes(Invocation invocation) {
         try {
             if (invocation != null && invocation.getInvoker() != null
                     && invocation.getInvoker().getUrl() != null
-                    && invocation.getInvoker().getInterface() != GenericService.class
-                    && !invocation.getMethodName().startsWith("$")) {
+                    && invocation.getInvoker().getInterface() != GenericService.class // 调用的不是泛化实现？？
+                    && !invocation.getMethodName().startsWith("$")) { // 不是泛化调用
                 String service = invocation.getInvoker().getUrl().getServiceInterface();
                 if (StringUtils.isNotEmpty(service)) {
+                    // 通过dubbo service获取反射后的方法Method
+                    // invocation中有调用interface、methodName、参数，如果invocation中的interface为null，通过第二个参数service反射获取dubbo service Class
                     Method method = getMethodByService(invocation, service);
+
+                    // 返回Type[]
+                    // 第一个返回值returnType是去掉Future后的原始类型，不带<XXX>的参数类型，如 java.util.List
+                    // 第二个返回值genericReturnType是去掉Future后的带XXX>的参数类型，如 java.util.List<java.lang.String>
                     return ReflectUtils.getReturnTypes(method);
                 }
             }
@@ -201,10 +215,19 @@ public class RpcUtils {
         return isOneway;
     }
 
+    /**
+     * 通过dubbo service获取反射后的方法Method
+     * @param invocation 调用信息中有当前调用的dubbo service方法名
+     * @param service  字符串类型的dubbo service包名+类名
+     * @return
+     * @throws NoSuchMethodException
+     */
     private static Method getMethodByService(Invocation invocation, String service) throws NoSuchMethodException {
         Class<?> invokerInterface = invocation.getInvoker().getInterface();
+        // 如果通过invocation.getInvoker().getInterface()获取为null，就通过dubbo service名反射获取其Class
         Class<?> cls = invokerInterface != null ? ReflectUtils.forName(invokerInterface.getClassLoader(), service)
                 : ReflectUtils.forName(service);
+        // 根据dubbo service的Class，methodName 和 参数，获取Method
         Method method = cls.getMethod(invocation.getMethodName(), invocation.getParameterTypes());
         if (method.getReturnType() == void.class) {
             return null;
