@@ -147,6 +147,13 @@ public class RegistryProtocol implements Protocol {
         this.cluster = cluster;
     }
 
+    /**
+     * 在 RegistryProtocol 通过 Dubbo SPI 初始化时存在"扩展点之间的依赖注入"
+     * （SPI的依赖注入：即当一个 SPI 的实例进行创建时，如果其内部存在某个SPI接口的 set方法，则会被反射注入）
+     * 所以此时的 protocol是 Protocol$Adaptive 类型，所以，此时会再走一遍下面的流程：
+     * Protocol$Adaptive#export() => QosProtocolWrapper#export()  => ProtocolListenerWrapper #export() => ProtocolFilterWrapper#export()  => XxxProtocol#export()
+     * @param protocol
+     */
     public void setProtocol(Protocol protocol) {
         this.protocol = protocol;
     }
@@ -169,6 +176,7 @@ public class RegistryProtocol implements Protocol {
     }
 
     public void register(URL registryUrl, URL registeredProviderUrl) {
+        // SPI方式获取 Registry 实例，这里获取的是 ZookeeperRegistry
         Registry registry = registryFactory.getRegistry(registryUrl);
         registry.register(registeredProviderUrl);
 
@@ -182,32 +190,70 @@ public class RegistryProtocol implements Protocol {
 
     @Override
     public <T> Exporter<T> export(final Invoker<T> originInvoker) throws RpcException {
+        /**
+         * 1、URL解析
+         * 处理结束后，获取到了三个URL
+         * registryUrl ：注册中心 URL
+         * providerUrl ：暴露服务的URL
+         * overrideSubscribeUrl ：服务监听节点 URL
+         */
+        // 1.1 获取注册中心信息 URL
         URL registryUrl = getRegistryUrl(originInvoker);
         // url to export locally
+        // 1.2 获取 需要暴露的 服务URL信息：通过 originInvoker.getUrl().getParameterAndDecoded(EXPORT_KEY) 来获取
         URL providerUrl = getProviderUrl(originInvoker);
 
+        // 1.3 订阅override数据
         // Subscribe the override data
         // FIXME When the provider subscribes, it will affect the scene : a certain JVM exposes the service and call
         //  the same service. Because the subscribed is cached key with the name of the service, it causes the
         //  subscription information to cover.
+        // 生成了服务提供者监听的 overrideSubscribeUrl
         final URL overrideSubscribeUrl = getSubscribedOverrideUrl(providerUrl);
+        // 创建当前服务的监听器 overrideSubscribeListener，用于监听overrideSubscribeUrl，
+        // 在 4、服务订阅 中完成了服务订阅，该服务订阅为 2.6 版本的订阅方式。 Dubbo 为了兼容性保留了 2.6版本的监听方式
         final OverrideListener overrideSubscribeListener = new OverrideListener(overrideSubscribeUrl, originInvoker);
         overrideListeners.put(overrideSubscribeUrl, overrideSubscribeListener);
 
+        // 2.7版本新增新增逻辑，，完成了2.7版本的动态配置获取和监听
+        // 获取动态配置信息进行合并
         providerUrl = overrideUrlWithConfig(providerUrl, overrideSubscribeListener);
+
         //export invoker
+        /**
+         * 2、服务暴露
+         */
         final ExporterChangeableWrapper<T> exporter = doLocalExport(originInvoker, providerUrl);
 
         // url to registry
+        /**
+         * 3、服务注册
+         */
+        // 获取注册中心实例 ，通过 RegistryFactory 来获取，也是 SPI 接口
+        // 我们是用zk作为注册中心，所以这里获取的实例是 ZookeeperRegistry
         final Registry registry = getRegistry(originInvoker);
+        // 获取 当前注册的服务提供者 URL，如果开启了简化 URL，则返回的是简化的URL
         final URL registeredProviderUrl = getUrlToRegistry(providerUrl, registryUrl);
         // decide if we need to delay publish
+        // 判断服务是否需要延迟发布，延迟发布则不会立即进行注册，否则进行注册
         boolean register = providerUrl.getParameter(REGISTER_KEY, true);
         if (register) {
+            // 调用远端注册中心的register方法进行服务注册
+            // 此时如果有消费者订阅了该服务，则推送消息让消费者引用此服务
+            // 注册中心缓存了所有提供者注册的服务以供消费者发现
             register(registryUrl, registeredProviderUrl);
         }
 
         // Deprecated! Subscribe to override rules in 2.6.x or before.
+        /**
+         * 4、服务订阅
+         * Dubbo服务在启动后，无论是消费者还是提供者都会监听部分节点信息
+         * （在zk上映射的节点(服务提供者为 configurators 节点，服务消费者为providers，configurators、routers 节点）
+         * 当控制台修改动态配置时会修改配置节点的信息，服务通过监听器感知到节点变化后自身更新配置
+         * overrideSubscribeUrl : 代表需要订阅的URL节点，当该URL所对应的节点发生变化时，会通知当前服务。其简化结构如下，其中 category 代表要监听的节点：
+         *                        provider://192.168.111.1:9998/com.kingfish.service.impl.DemoService?&category=configurators
+         * overrideSubscribeListener : 当监听的节点发生变化时，会回调该监听器
+         */
         registry.subscribe(overrideSubscribeUrl, overrideSubscribeListener);
 
         exporter.setRegisterUrl(registeredProviderUrl);
@@ -229,18 +275,33 @@ public class RegistryProtocol implements Protocol {
     }
 
     private URL overrideUrlWithConfig(URL providerUrl, OverrideListener listener) {
+        // 1. 获取应用级别现有配置规则，并在导出之前覆盖提供程序URL
         providerUrl = providerConfigurationListener.overrideUrl(providerUrl);
+        // 2. 初始化服务级别监听器，并保存到 serviceConfigurationListeners 中，完成了对当前服务的监听
         ServiceConfigurationListener serviceConfigurationListener = new ServiceConfigurationListener(providerUrl, listener);
         serviceConfigurationListeners.put(providerUrl.getServiceKey(), serviceConfigurationListener);
+        // 3. 获取服务级别现有配置规则，并在导出之前覆盖提供程序URL
         return serviceConfigurationListener.overrideUrl(providerUrl);
     }
 
+    /**
+     * 服务暴露
+     * @param originInvoker
+     * @param providerUrl
+     * @param <T>
+     * @return
+     */
     @SuppressWarnings("unchecked")
     private <T> ExporterChangeableWrapper<T> doLocalExport(final Invoker<T> originInvoker, URL providerUrl) {
+        //  将 originInvoker 转换为 缓存key，从 bounds 缓存中尝试获取
         String key = getCacheKey(originInvoker);
 
         return (ExporterChangeableWrapper<T>) bounds.computeIfAbsent(key, s -> {
+            // Invoker 委托
             Invoker<?> invokerDelegate = new InvokerDelegate<>(originInvoker, providerUrl);
+            // Invoker 转换为 Exporter
+            // 这里注意： protocol.export(invokerDelegete) 中 protocol 在 RegistryProtocol 在创建的时候依赖注入的，其实现还是Protocol适配器
+            // Protocol$Adaptive#export() => QosProtocolWrapper#export() => ProtocolListenerWrapper#export() => ProtocolFilterWrapper#export() => DubboProtocol#export()
             return new ExporterChangeableWrapper<>((Exporter<T>) protocol.export(invokerDelegate), originInvoker);
         });
     }
@@ -314,8 +375,11 @@ public class RegistryProtocol implements Protocol {
 
     protected URL getRegistryUrl(Invoker<?> originInvoker) {
         URL registryUrl = originInvoker.getUrl();
+        // 如果协议是 register，则说明当前URL保存了注册中心的信息
+        // 通过 registryUrl.getParameter("registry") 来获取注册中心的真实类型(如redis、zookeeper。这里为zookeeper)并替换协议类型，返回注册中心的信息
         if (REGISTRY_PROTOCOL.equals(registryUrl.getProtocol())) {
             String protocol = registryUrl.getParameter(REGISTRY_KEY, DEFAULT_REGISTRY);
+            // 将 协议替换为 注册中心 真实协议
             registryUrl = registryUrl.setProtocol(protocol).removeParameter(REGISTRY_KEY);
         }
         return registryUrl;
@@ -360,17 +424,21 @@ public class RegistryProtocol implements Protocol {
     }
 
     private URL getSubscribedOverrideUrl(URL registeredProviderUrl) {
+        // 1、protocol 修改为 provider。表明当前服务监听的是应用于服务提供者端的配置(消费者端则为 consumer)；
+        // 2、添加 category=configurators。声明监听的节点为 configurators节点（消费者还会监听 routers、provider 等节点）
         return registeredProviderUrl.setProtocol(PROVIDER_PROTOCOL)
                 .addParameters(CATEGORY_KEY, CONFIGURATORS_CATEGORY, CHECK_KEY, String.valueOf(false));
     }
 
     /**
      * Get the address of the providerUrl through the url of the invoker
+     * 获取服务提供者的URL信息
      *
      * @param originInvoker
      * @return
      */
     private URL getProviderUrl(final Invoker<?> originInvoker) {
+        // 从原始URL 中获取 export属性的value，这里保存的是需要导出的服务信息
         String export = originInvoker.getUrl().getParameterAndDecoded(EXPORT_KEY);
         if (export == null || export.length() == 0) {
             throw new IllegalArgumentException("The registry export url is null! registry: " + originInvoker.getUrl());

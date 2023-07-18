@@ -111,6 +111,12 @@ public abstract class AbstractConfig implements Serializable {
         appendParameters(parameters, config, null);
     }
 
+    /**
+     * 获取config中的get方法，将其不为空的值设置到map中
+     * @param parameters
+     * @param config
+     * @param prefix
+     */
     @SuppressWarnings("unchecked")
     public static void appendParameters(Map<String, String> parameters, Object config, String prefix) {
         if (config == null) {
@@ -454,13 +460,22 @@ public abstract class AbstractConfig implements Serializable {
         this.prefix = prefix;
     }
 
+    /**
+     * 把当前AbstractConfig的属性全部都refresh赋值一遍
+     * 具体值是把当前AbstractConfig中的配置 和 Environment的很多Configuration，生成一个带prefix和id的CompositeConfiguration复合配置
+     * 按优先级的从CompositeConfiguration中获取值，设置到当前AbstractConfig的属性中
+     */
     public void refresh() {
         Environment env = ApplicationModel.getEnvironment();
         try {
+            // 根据当前AbstractConfig的proxy、id获取到一个CompositeConfiguration，其可以按优先级从多种Configuration获取值
             CompositeConfiguration compositeConfiguration = env.getPrefixedConfiguration(this);
+
             // loop methods, get override value and set the new value back to method
+            //  和复合配置中的属性合并，这里通过反射将自身的一些属性设置为复合配置中的属性
             Method[] methods = getClass().getMethods();
             for (Method method : methods) {
+                // set方法
                 if (MethodUtils.isSetter(method)) {
                     try {
                         String value = StringUtils.trim(compositeConfiguration.getString(extractPropertyName(getClass(), method)));
@@ -473,7 +488,7 @@ public abstract class AbstractConfig implements Serializable {
                                 this.getClass().getSimpleName() +
                                 ", please make sure every property has getter/setter method provided.");
                     }
-                } else if (isParametersSetter(method)) {
+                } else if (isParametersSetter(method)) {  // setParameters(Map<String, String> parameters) 方法
                     String value = StringUtils.trim(compositeConfiguration.getString(extractPropertyName(getClass(), method)));
                     if (StringUtils.isNotEmpty(value)) {
                         Map<String, String> map = invokeGetParameters(getClass(), this);

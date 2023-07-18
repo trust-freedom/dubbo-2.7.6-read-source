@@ -504,6 +504,7 @@ public class DubboBootstrap extends GenericEventListener {
 
         ApplicationModel.initFrameworkExts();
 
+        // 获取配置中心的配置，保存到 Environment 的 dynamicConfiguration
         startConfigCenter();
 
         useRegistryAsConfigCenterIfNecessary();
@@ -579,10 +580,17 @@ public class DubboBootstrap extends GenericEventListener {
         ConfigValidationUtils.validateSslConfig(getSsl());
     }
 
+    /**
+     * 获取配置中心的配置，保存到 Environment 的 dynamicConfiguration
+     */
     private void startConfigCenter() {
         Collection<ConfigCenterConfig> configCenters = configManager.getConfigCenters();
 
+        /**
+         * 确定配置中心的配置
+         */
         // check Config Center
+        // 没有ConfigCenterConfig
         if (CollectionUtils.isEmpty(configCenters)) {
             ConfigCenterConfig configCenterConfig = new ConfigCenterConfig();
             configCenterConfig.refresh();
@@ -590,20 +598,34 @@ public class DubboBootstrap extends GenericEventListener {
                 configManager.addConfigCenter(configCenterConfig);
                 configCenters = configManager.getConfigCenters();
             }
-        } else {
+        } else {  // ConfigCenterConfig 存在
             for (ConfigCenterConfig configCenterConfig : configCenters) {
+                // AbstractConfig中refresh方法，从Environment中获取CompositeConfiguration，并调用setter方法设置到当前configCenterConfig
                 configCenterConfig.refresh();
+                // 配置校验
                 ConfigValidationUtils.validateConfigCenterConfig(configCenterConfig);
             }
         }
 
+        /**
+         * 加载配置中心实例，并获取配置中心上的配置内容，保存到 Environment 中
+         */
         if (CollectionUtils.isNotEmpty(configCenters)) {
             CompositeDynamicConfiguration compositeDynamicConfiguration = new CompositeDynamicConfiguration();
             for (ConfigCenterConfig configCenter : configCenters) {
+                /**
+                 * 环境准备，读取配置中心的配置加载到 Environment 中
+                 * 再将 DynamicConfiguration 添加到 CompositeDynamicConfiguration
+                 */
                 compositeDynamicConfiguration.addConfiguration(prepareEnvironment(configCenter));
             }
             environment.setDynamicConfiguration(compositeDynamicConfiguration);
         }
+
+        /**
+         * 刷新全部配置，将外部配置中心的配置应用到本地
+         * 触发其他Dubbo 配置类的刷新操作，这个刷新操作会从 Environment 中获取属于自己的配置信息并加载
+         */
         configManager.refreshAll();
     }
 
@@ -849,11 +871,17 @@ public class DubboBootstrap extends GenericEventListener {
     }
     /* serve for builder apis, end */
 
+    /**
+     * 环境准备，读取配置中心的配置加载到 Environment 中
+     * @param configCenter
+     * @return
+     */
     private DynamicConfiguration prepareEnvironment(ConfigCenterConfig configCenter) {
         if (configCenter.isValid()) {
             if (!configCenter.checkOrUpdateInited()) {
                 return null;
             }
+            // 读取配置中心中的动态配置
             DynamicConfiguration dynamicConfiguration = getDynamicConfiguration(configCenter.toUrl());
             String configContent = dynamicConfiguration.getProperties(configCenter.getConfigFile(), configCenter.getGroup());
 

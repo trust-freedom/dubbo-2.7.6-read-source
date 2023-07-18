@@ -226,17 +226,24 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         return failedNotified;
     }
 
+    /**
+     *
+     * @param url  registeredProviderUrl
+     */
     @Override
     public void register(URL url) {
         if (!acceptable(url)) {
             logger.info("URL " + url + " will not be registered to Registry. Registry " + url + " does not accept service of this protocol type.");
             return;
         }
+        // 将url添加到 AbstractRegistry#registered 列表中
         super.register(url);
+        // 开始注册，从失败列表删除
         removeFailedRegistered(url);
         removeFailedUnregistered(url);
         try {
             // Sending a registration request to the server side
+            // 这里调用 ZookeeperRegistry#doRegister
             doRegister(url);
         } catch (Exception e) {
             Throwable t = e;
@@ -256,6 +263,7 @@ public abstract class FailbackRegistry extends AbstractRegistry {
             }
 
             // Record a failed registration request to a failed list, retry regularly
+            // 添加到注册失败列表，并定期重试
             addFailedRegistered(url);
         }
     }
@@ -292,10 +300,16 @@ public abstract class FailbackRegistry extends AbstractRegistry {
 
     @Override
     public void subscribe(URL url, NotifyListener listener) {
+        // 调用 org.apache.dubbo.registry.support.AbstractRegistry#subscribe
+        // 将 url 和 listener 添加到 org.apache.dubbo.registry.support.AbstractRegistry#subscribed (ConcurrentMap<URL, Set<NotifyListener>> subscribed)中
         super.subscribe(url, listener);
+        // 移除订阅失败的url
         removeFailedSubscribed(url, listener);
         try {
             // Sending a subscription request to the server side
+            // 进行订阅，这里调用的是 org.apache.dubbo.registry.zookeeper.ZookeeperRegistry#doSubscribe
+            // 这一步结束后，zk 上在服务下多个一个 configurators节点
+            // 如 /dubbo/com.kingfish.service.impl.DemoService/configurators
             doSubscribe(url, listener);
         } catch (Exception e) {
             Throwable t = e;
@@ -320,6 +334,7 @@ public abstract class FailbackRegistry extends AbstractRegistry {
             }
 
             // Record a failed registration request to a failed list, retry regularly
+            // 添加到订阅失败列表，定时重试
             addFailedSubscribed(url, listener);
         }
     }

@@ -64,6 +64,7 @@ public class ZookeeperRegistry extends FailbackRegistry {
 
     private final static String DEFAULT_ROOT = "dubbo";
 
+    // zk注册的根，默认是dubbo
     private final String root;
 
     private final Set<String> anyServices = new ConcurrentHashSet<>();
@@ -122,6 +123,10 @@ public class ZookeeperRegistry extends FailbackRegistry {
         }
     }
 
+    /**
+     * 执行注册
+     * @param url  registeredProviderUrl
+     */
     @Override
     public void doRegister(URL url) {
         try {
@@ -140,9 +145,18 @@ public class ZookeeperRegistry extends FailbackRegistry {
         }
     }
 
+    /**
+     *
+     * @param url       服务发布：provider://192.168.111.1:9998/com.kingfish.service.impl.DemoService?&category=configurators
+     *                  消费者URL：consumer://192.168.111.1:9998/com.kingfish.service.impl.DemoService?&category=providers,configurators,routers
+     * @param listener
+     */
     @Override
     public void doSubscribe(final URL url, final NotifyListener listener) {
         try {
+            /**
+             * 1、如果url 指定的服务接口为 *, 则监听所有，直接监听root 节点 ，即zk 中的 dubbo 节点
+             */
             if (ANY_VALUE.equals(url.getServiceInterface())) {
                 String root = toRootPath();
                 ConcurrentMap<NotifyListener, ChildListener> listeners = zkListeners.computeIfAbsent(url, k -> new ConcurrentHashMap<>());
@@ -167,16 +181,31 @@ public class ZookeeperRegistry extends FailbackRegistry {
                     }
                 }
             } else {
+                /**
+                 * 2. 将 URL 分类遍历
+                 * toCategoriesPath 是获取分类路径
+                 * 如
+                 * /dubbo/com.kingfish.service.impl.DemoService/configurators
+                 * /dubbo/com.kingfish.service.impl.DemoService/providers
+                 * /dubbo/com.kingfish.service.impl.DemoService/routers
+                 * 这里获取的是 /dubbo/com.kingfish.service.impl.DemoService/configurators
+                 */
                 List<URL> urls = new ArrayList<>();
                 for (String path : toCategoriesPath(url)) {
+                    // 判断zkListeners中是否有监听器监听当前URL，如果没有，则创建一个空的Map
                     ConcurrentMap<NotifyListener, ChildListener> listeners = zkListeners.computeIfAbsent(url, k -> new ConcurrentHashMap<>());
+                    // 判断是否有使用当前 listener 作为监听器监听当前URL。如果没有则创建一个对应的监听
                     ChildListener zkListener = listeners.computeIfAbsent(listener, k -> (parentPath, currentChilds) -> ZookeeperRegistry.this.notify(url, k, toUrlsWithEmpty(url, parentPath, currentChilds)));
+                    // 创建/dubbo/com.kingfish.service.impl.DemoService/configurators 节点
                     zkClient.create(path, false);
+                    // 添加节点监听器。使用 zkListener 监听 path，返回值为 path 的子节点
                     List<String> children = zkClient.addChildListener(path, zkListener);
                     if (children != null) {
+                        // 将 children  转换为 url，其中 toUrlsWithEmpty是为了避免出现 null，如果无法转换，则返回一个 empty:// 协议头的 URL
                         urls.addAll(toUrlsWithEmpty(url, path, children));
                     }
                 }
+                // 主动调用通知事件
                 notify(url, listener, urls);
             }
         } catch (Throwable e) {
@@ -242,11 +271,15 @@ public class ZookeeperRegistry extends FailbackRegistry {
 
     private String[] toCategoriesPath(URL url) {
         String[] categories;
+        // 如果 url 中的 category 属性为 *，则认为当前 URL 监听所有分类的节点
+        // 包括providers、consumers、routers、configurators
         if (ANY_VALUE.equals(url.getParameter(CATEGORY_KEY))) {
             categories = new String[]{PROVIDERS_CATEGORY, CONSUMERS_CATEGORY, ROUTERS_CATEGORY, CONFIGURATORS_CATEGORY};
         } else {
+            // 否认则获取url上的category属性，默认为providers
             categories = url.getParameter(CATEGORY_KEY, new String[]{DEFAULT_CATEGORY});
         }
+        // 对 categories  进一步处理，拼接上 servicepath
         String[] paths = new String[categories.length];
         for (int i = 0; i < categories.length; i++) {
             paths[i] = toServicePath(url) + PATH_SEPARATOR + categories[i];
@@ -258,6 +291,11 @@ public class ZookeeperRegistry extends FailbackRegistry {
         return toServicePath(url) + PATH_SEPARATOR + url.getParameter(CATEGORY_KEY, DEFAULT_CATEGORY);
     }
 
+    /**
+     * 获取多层的URL结构
+     * @param url
+     * @return
+     */
     private String toUrlPath(URL url) {
         return toCategoryPath(url) + PATH_SEPARATOR + URL.encode(url.toFullString());
     }

@@ -26,6 +26,7 @@ import java.util.List;
 
 /**
  * This is an abstraction specially customized for the sequence Dubbo retrieves properties.
+ * 专门为Dubbo检索属性的序列定制的抽象
  */
 public class CompositeConfiguration implements Configuration {
     private Logger logger = LoggerFactory.getLogger(CompositeConfiguration.class);
@@ -73,6 +74,11 @@ public class CompositeConfiguration implements Configuration {
         this.configList.add(pos, configuration);
     }
 
+    /**
+     * 从configList中依次遍历，先找到包含key的Configuration，即返回
+     * @param key
+     * @return
+     */
     @Override
     public Object getInternalProperty(String key) {
         Configuration firstMatchingConfiguration = null;
@@ -98,6 +104,14 @@ public class CompositeConfiguration implements Configuration {
         return configList.stream().anyMatch(c -> c.containsKey(key));
     }
 
+    /**
+     * prefix，id 都不为空：根据 prefix + id + "." + key 获取值
+     * prefix 不为空：根据 prefix + key 获取值
+     * 否则，根据 key 获取值
+     * @param key property to retrieve
+     * @param defaultValue default value
+     * @return
+     */
     @Override
     public Object getProperty(String key, Object defaultValue) {
         Object value = null;

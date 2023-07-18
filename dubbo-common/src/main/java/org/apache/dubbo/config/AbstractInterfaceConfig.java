@@ -237,6 +237,7 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
 
 
     /**
+     * 对 local 和 stub 的检查：是否存在入参为 Interface 的构造函数
      * Legitimacy check of stub, note that: the local will deprecated, and replace with <code>stub</code>
      *
      * @param interfaceClass for provider side, it is the {@link Class} of the service that will be exported; for consumer
@@ -312,6 +313,7 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
 
     public void completeCompoundConfigs(AbstractInterfaceConfig interfaceConfig) {
         if (interfaceConfig != null) {
+            // 如果 application 没设置，则使用 interfaceConfig 提供的 application。下面以此类推
             if (application == null) {
                 setApplication(interfaceConfig.getApplication());
             }

@@ -165,35 +165,68 @@ public class ConfigValidationUtils {
      */
     private static final Pattern PATTERN_KEY = Pattern.compile("[*,\\-._0-9a-zA-Z]+");
 
-
+    /**
+     * 加载所有注册中心，将注册中心解析成URL返回
+     * 由于一个服务可以被注册到多个服务注册中心，这里加载所有的服务注册中心对象
+     * @param interfaceConfig
+     * @param provider
+     * @return
+     */
     public static List<URL> loadRegistries(AbstractInterfaceConfig interfaceConfig, boolean provider) {
         // check && override if necessary
         List<URL> registryList = new ArrayList<URL>();
         ApplicationConfig application = interfaceConfig.getApplication();
         List<RegistryConfig> registries = interfaceConfig.getRegistries();
+
+        // 如果注册中心配置不为空
         if (CollectionUtils.isNotEmpty(registries)) {
             for (RegistryConfig config : registries) {
                 String address = config.getAddress();
+                // 如果注册中心地址为空，则设置为 0.0.0.0
                 if (StringUtils.isEmpty(address)) {
                     address = ANYHOST_VALUE;
                 }
+                // 不可用的注册中心地址 不处理 （地址信息为 N/A）
                 if (!RegistryConfig.NO_AVAILABLE.equalsIgnoreCase(address)) {
+                    // 参数会添加到map中，最后会将 map 转换成 url
                     Map<String, String> map = new HashMap<String, String>();
+
+                    /**
+                     * 1、参数解析，将参数添加到 map 中
+                     */
+                    // 添加 ApplicationConfig 中的字段信息到 map 中
                     AbstractConfig.appendParameters(map, application);
+                    // 添加 RegistryConfig 字段信息到 map 中
                     AbstractConfig.appendParameters(map, config);
+                    // 设置注册中心的 path 为 RegistryService
                     map.put(PATH_KEY, RegistryService.class.getName());
+                    // 添加运行时参数到 map 中（dubbo=protocolVersion、timestamp、pid）
                     AbstractInterfaceConfig.appendRuntimeParameters(map);
+                    // 设置默认协议类型为 dubbo
                     if (!map.containsKey(PROTOCOL_KEY)) {
                         map.put(PROTOCOL_KEY, DUBBO_PROTOCOL);
                     }
+
+                    /**
+                     * 2、根据 address 和 map 将信息转化为 URL
+                     * dubbo 协议如下格式: zookeeper://localhost:2181/org.apache.dubbo.registry.RegistryService?application=Api-provider&dubbo=2.0.2&pid=24736&release=2.7.0&timestamp=1615539839228
+                     * 这里返回URL列表，因为address 可能包含多个注册中心。address 被正则切割，每个地址对应一个URL
+                     */
                     List<URL> urls = UrlUtils.parseURLs(address, map);
 
+                    /**
+                     * 3、对 URL 进行进一步处理
+                     */
                     for (URL url : urls) {
 
                         url = URLBuilder.from(url)
+                                // 保存服务暴露使用的注册中心的协议
                                 .addParameter(REGISTRY_KEY, url.getProtocol())
+                                // 设置 url 协议为 registry，表示当前URL 用于配置注册中心
                                 .setProtocol(extractRegistryType(url))
                                 .build();
+                        // 通过判断条件，决定是否添加 url 到 registryList 中
+                        // 满足两个条件会往里添加：1、是服务提供者 且 需要向注册中心注册；2、不是提供者 但订阅了注册中心
                         if ((provider && url.getParameter(REGISTER_KEY, true))
                                 || (!provider && url.getParameter(SUBSCRIBE_KEY, true))) {
                             registryList.add(url);

@@ -147,6 +147,7 @@ public class ProtocolFilterWrapper implements Protocol {
 
     @Override
     public <T> Exporter<T> export(Invoker<T> invoker) throws RpcException {
+        // 如果URL协议类型是 registry，则不构建过滤器链
         if (UrlUtils.isRegistry(invoker.getUrl())) {
             return protocol.export(invoker);
         }
@@ -155,6 +156,7 @@ public class ProtocolFilterWrapper implements Protocol {
 
     @Override
     public <T> Invoker<T> refer(Class<T> type, URL url) throws RpcException {
+        // 如果URL协议类型是 registry，则不构建过滤器链
         if (UrlUtils.isRegistry(url)) {
             return protocol.refer(type, url);
         }

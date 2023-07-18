@@ -122,15 +122,25 @@ public class Environment extends LifecycleAdapter implements FrameworkExt {
 //            return prefixedConfiguration;
 //        }
 //        prefixedConfiguration = prefixedConfigurations.get(config);
+
+        /**
+         * 根据指定的 prefix 和 id 创建 CompositeConfiguration
+         * CompositeConfiguration会根据优先级顺序从configList的Configuration获取值
+         * prefix 和 id 是 CompositeConfiguration 的属性，getProperty()时已经包含了把 prefix 和 id 作为 key 一部分的逻辑
+         * - getPrefix() 是按照一定规则拼接： 对 ServiceConfig 来说 为dubbo.service.{interfaceName}
+         * - getId 获取的是 interfaceName名，对 ServiceConfig 来说会在 serviceConfig.setInterface 时会赋值 id
+         */
         CompositeConfiguration prefixedConfiguration = new CompositeConfiguration(config.getPrefix(), config.getId());
+        // 将当前AbstractConfig适配为Configuration
         Configuration configuration = new ConfigConfigurationAdapter(config);
+        // 配置中心优先
         if (this.isConfigCenterFirst()) {
             // The sequence would be: SystemConfiguration -> AppExternalConfiguration -> ExternalConfiguration -> AbstractConfig -> PropertiesConfiguration
             // Config center has the highest priority
             prefixedConfiguration.addConfiguration(systemConfiguration);
             prefixedConfiguration.addConfiguration(environmentConfiguration);
             prefixedConfiguration.addConfiguration(appExternalConfiguration);
-            prefixedConfiguration.addConfiguration(externalConfiguration);
+            prefixedConfiguration.addConfiguration(externalConfiguration);  // 2个externalConfiguration是configCenter配置，排在当前AbstractConfig之前
             prefixedConfiguration.addConfiguration(configuration);
             prefixedConfiguration.addConfiguration(propertiesConfiguration);
         } else {

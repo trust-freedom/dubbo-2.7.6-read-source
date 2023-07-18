@@ -281,12 +281,21 @@ public class DubboProtocol extends AbstractProtocol {
     public <T> Exporter<T> export(Invoker<T> invoker) throws RpcException {
         URL url = invoker.getUrl();
 
-        // export service.
+        /**
+         * export service.
+         * 1. 前置工作
+         * 获取需要暴露的服务的key，结构为：协议/服务接口:版本:端口号
+         * 如这里解析出来的key为： dubbo/api.DemoService:1.0.0:20880
+         */
         String key = serviceKey(url);
+        // 封装成 Export
+        // exporterMap 中保存的是本机暴露的服务接口列表，在服务调用 Exporter#unexport 时会将服务从exporterMap 中移除
+        // 当服务消费者进行调用时，提供者会根据调用服务信息获取serviceKey 通过 exporterMap 来获取 服务Exporter，再通过 Exporter 获取 Invoker 来进行方法调用
         DubboExporter<T> exporter = new DubboExporter<T>(invoker, key, exporterMap);
         exporterMap.put(key, exporter);
 
         //export an stub service for dispatching event
+        // 本地存根相关代码
         Boolean isStubSupportEvent = url.getParameter(STUB_EVENT_KEY, DEFAULT_STUB_EVENT);
         Boolean isCallbackservice = url.getParameter(IS_CALLBACK_SERVICE, false);
         if (isStubSupportEvent && !isCallbackservice) {
@@ -300,23 +309,42 @@ public class DubboProtocol extends AbstractProtocol {
             }
         }
 
+        /**
+         * 2. 开启服务
+         */
+        // 开启服务，这里默认的是 Netty
+        // 同一个机器的不同接口服务导出只会开启一个NettyServer
         openServer(url);
+
+        /**
+         * 3. 序列化优化
+         */
+        // 对序列化进行优化，可以通过 optimizer 参数指定优化器类的全路径类名
         optimizeSerialization(url);
 
         return exporter;
     }
 
+    /**
+     * 开启服务
+     * @param url
+     */
     private void openServer(URL url) {
         // find server.
+        // 获取服务提供者机器的 ip:port, 并将其作为服务器实例的 key，用于标识当前的服务器实例
+        // 这里的端口是 dubbo 服务 端口
         String key = url.getAddress();
         //client can export a service which's only for server to invoke
+        // 判断是否是服务提供者，服务提供者才会启动监听
         boolean isServer = url.getParameter(IS_SERVER_KEY, true);
         if (isServer) {
+            // 从缓存中获取服务，如果 服务提供者的 ip:port 已经创建了服务，则不会重复创建
             ProtocolServer server = serverMap.get(key);
             if (server == null) {
                 synchronized (this) {
                     server = serverMap.get(key);
                     if (server == null) {
+                        // 服务的创建过程，在服务提供者上开启了端口监听
                         serverMap.put(key, createServer(url));
                     }
                 }
@@ -328,26 +356,37 @@ public class DubboProtocol extends AbstractProtocol {
     }
 
     private ProtocolServer createServer(URL url) {
+        /**
+         * 1. 参数设置
+         */
         url = URLBuilder.from(url)
                 // send readonly event when server closes, it's enabled by default
+                // 1.1 默认启用服务器关闭时发送只读事件
                 .addParameterIfAbsent(CHANNEL_READONLYEVENT_SENT_KEY, Boolean.TRUE.toString())
                 // enable heartbeat by default
+                // 1.2 默认启用心跳
                 .addParameterIfAbsent(HEARTBEAT_KEY, String.valueOf(DEFAULT_HEARTBEAT))
-                .addParameter(CODEC_KEY, DubboCodec.NAME)
+                .addParameter(CODEC_KEY, DubboCodec.NAME)  // 添加 DubboCodec 为指定编码器
                 .build();
+        // 1.3 获取传输协议，默认为 Netty
         String str = url.getParameter(SERVER_KEY, DEFAULT_REMOTING_SERVER);
 
         if (str != null && str.length() > 0 && !ExtensionLoader.getExtensionLoader(Transporter.class).hasExtension(str)) {
             throw new RpcException("Unsupported server type: " + str + ", url: " + url);
         }
 
+        /**
+         * 2. 开启服务端口
+         */
         ExchangeServer server;
         try {
+            // 2.1 绑定ip端口，开启服务，这里server 默认是NettyServer，需要注意的是这里传入的requestHandler 是最终处理消息的处理器
             server = Exchangers.bind(url, requestHandler);
         } catch (RemotingException e) {
             throw new RpcException("Fail to start server(url: " + url + ") " + e.getMessage(), e);
         }
 
+        // 2.2 校验客户端的传输协议
         str = url.getParameter(CLIENT_KEY);
         if (str != null && str.length() > 0) {
             Set<String> supportedTypes = ExtensionLoader.getExtensionLoader(Transporter.class).getSupportedExtensions();
