@@ -55,8 +55,13 @@ public class FailoverClusterInvoker<T> extends AbstractClusterInvoker<T> {
     @Override
     @SuppressWarnings({"unchecked", "rawtypes"})
     public Result doInvoke(Invocation invocation, final List<Invoker<T>> invokers, LoadBalance loadbalance) throws RpcException {
+        // 1. 获取所有服务提供者
         List<Invoker<T>> copyInvokers = invokers;
+        // 检查服务提供者，如果集合为空则抛出异常
+        // 该方法调用的是AbstractClusterInvoker#checkInvokers 方法
         checkInvokers(copyInvokers, invocation);
+
+        // 2. 获取指定的重试次数  retries。默认重试次数为1次，也就是会调用两次
         String methodName = RpcUtils.getMethodName(invocation);
         int len = getUrl().getMethodParameter(methodName, RETRIES_KEY, DEFAULT_RETRIES) + 1;
         if (len <= 0) {
@@ -66,19 +71,31 @@ public class FailoverClusterInvoker<T> extends AbstractClusterInvoker<T> {
         RpcException le = null; // last exception.
         List<Invoker<T>> invoked = new ArrayList<Invoker<T>>(copyInvokers.size()); // invoked invokers.
         Set<String> providers = new HashSet<String>(len);
+        // 3. 开始循环调用
         for (int i = 0; i < len; i++) {
             //Reselect before retry to avoid a change of candidate `invokers`.
             //NOTE: if `invokers` changed, then `invoked` also lose accuracy.
+            // 重试时，进行重新选择，避免重试时  invoker 列表已经发生改变 这样做的好处是，如果某个服务挂了，通过调用 list 可得到最新可用的 Invoker 列表
+            // 注意： 如果 列表发生变化，则 invoked判断会失效，因为  invoker 实例已经改变
             if (i > 0) {
+                // 3.1 进行重试校验
+                // 检查是否有线程调用了当前ReferenceConfig的destroy()方法，销毁了当前消费者
                 checkWhetherDestroyed();
+                // 重新获取所有服务提供者
                 copyInvokers = list(invocation);
                 // check again
+                // 再次检查 invoker 列表是否为空
                 checkInvokers(copyInvokers, invocation);
             }
+            // 3.2. 选择负载均衡策略。该方法调用的是 AbstractClusterInvoker#select 方法
             Invoker<T> invoker = select(loadbalance, invocation, copyInvokers, invoked);
+            // 添加 invoker 到 invoked 列表中，表明当前 invoker已经被调用过
             invoked.add(invoker);
+            // 设置 invoked 到 RPC 上下文中
             RpcContext.getContext().setInvokers((List) invoked);
             try {
+                // 3.3. 具体发起远程调用
+                // 具体调用时出现异常会进行重试，而在 3.1，3.2 时出现异常并不会重试。因为 3.1,3.2 属于调用前的准备工作
                 Result result = invoker.invoke(invocation);
                 if (le != null && logger.isWarnEnabled()) {
                     logger.warn("Although retry the method " + methodName
@@ -103,6 +120,8 @@ public class FailoverClusterInvoker<T> extends AbstractClusterInvoker<T> {
                 providers.add(invoker.getUrl().getAddress());
             }
         }
+
+        // 4. 重试后仍然失败
         throw new RpcException(le.getCode(), "Failed to invoke the method "
                 + methodName + " in the service " + getInterface().getName()
                 + ". Tried " + len + " times of the providers " + providers
